@@ -158,34 +158,3 @@ def compute_benchmark(prices, index_ticker=None):
     bm.name = "benchmark"
     return bm
 
-if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, ".")
-
-    prices = pd.read_csv(
-        "data/processed/prices.csv",
-        index_col=0, parse_dates=True
-    )
-    print(f"Loaded prices: {prices.shape}")
-
-    from signals import compute_momentum
-    momentum = compute_momentum(prices)
-
-    print("\nBuilding portfolios (monthly rebalancing)...")
-    portfolios = build_portfolios(prices, momentum)
-    benchmark  = compute_benchmark(prices)
-    benchmark  = benchmark.reindex(portfolios.index)
-
-    print(f"\nPortfolio period: {portfolios.index[0].date()} "
-          f"to {portfolios.index[-1].date()}")
-    print(f"Months          : {len(portfolios)}")
-
-    print("\nSample output (last 6 months):")
-    print(portfolios[["long_short_return","long_only_return",
-                       "n_top","n_bottom"]].tail(6).round(4))
-
-    import os
-    os.makedirs("data/processed", exist_ok=True)
-    portfolios.to_csv("data/processed/portfolios.csv")
-    benchmark.to_csv("data/processed/benchmark.csv")
-    print("\nSaved to data/processed/")

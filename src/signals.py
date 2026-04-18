@@ -163,30 +163,37 @@ def build_rebalance_schedule(prices, start="2018-01", end="2024-07"):
         print(f"  Bottom   : {result['bottom']}")
 
     return momentum, schedule
+def compare_formation_periods(prices, formations=[3, 6, 9, 12], skip=1):
+    """
+    Test different momentum formation periods and compare signal strength.
+    
+    Parameters
+    ----------
+    prices     : DataFrame, monthly prices
+    formations : list of formation periods to test
+    skip       : months to skip (default 1)
+    
+    Returns
+    -------
+    dict of {formation: momentum DataFrame}
+    """
+    results = {}
+    
+    for f in formations:
+        print(f"Computing {f}-{skip} momentum...")
+        mom = compute_momentum(prices, lookback=f, skip=skip)
+        results[f] = mom
+    
+    return results
 
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, ".")
 
-    # Load prices
     prices = pd.read_csv(
         "data/processed/prices.csv",
-        index_col=0,
-        parse_dates=True
+        index_col=0, parse_dates=True
     )
-
     print(f"Loaded prices: {prices.shape}")
-    print(f"Period: {prices.index[0].date()} to {prices.index[-1].date()}")
-
-    # Build rebalance schedule
     momentum, schedule = build_rebalance_schedule(prices)
-
-    print(f"\n{'='*60}")
-    print(f"Total rebalancing periods: {len(schedule)}")
-
-    # Show momentum signal for last rebalance
-    if schedule:
-        last = schedule[-1]
-        print(f"\nMost recent rebalance ({last['period']}):")
-        print(f"  Top tercile    : {last['top']}")
-        print(f"  Bottom tercile : {last['bottom']}")
+    print(f"\nTotal rebalancing periods: {len(schedule)}")

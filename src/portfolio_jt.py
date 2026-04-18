@@ -167,32 +167,3 @@ def build_jt_portfolios(prices, formation=12, skip=1, holding=6):
 
     return pd.DataFrame(results).set_index("date")
 
-if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, ".")
-
-    prices = pd.read_csv(
-        "data/processed/prices.csv",
-        index_col=0,
-        parse_dates=True
-    )
-    print(f"Loaded prices: {prices.shape}")
-
-    print("\nBuilding JT overlapping portfolios (12-1-6)...")
-    portfolios = build_jt_portfolios(
-        prices,
-        formation=12,
-        skip=1,
-        holding=6
-    )
-
-    print(f"\nPortfolio period: {portfolios.index[0].date()} "
-          f"to {portfolios.index[-1].date()}")
-    print(f"Months          : {len(portfolios)}")
-    print(f"\nSample (last 6 months):")
-    print(portfolios.tail(6).round(4))
-
-    import os
-    os.makedirs("data/processed", exist_ok=True)
-    portfolios.to_csv("data/processed/portfolios_jt.csv")
-    print("\nSaved to data/processed/portfolios_jt.csv")
