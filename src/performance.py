@@ -20,146 +20,183 @@ def compute_metrics(returns, name="Strategy", rf=0.0):
     ann_vol     = r.std() * np.sqrt(12)
     sharpe      = (ann_return - rf) / ann_vol if ann_vol > 0 else np.nan
 
-    # Drawdown
     cum         = (1 + r).cumprod()
     rolling_max = cum.cummax()
     drawdown    = (cum - rolling_max) / rolling_max
     max_dd      = drawdown.min()
 
-    # Win rate
-    win_rate = (r > 0).mean()
-
-    # Best/worst month
+    win_rate    = (r > 0).mean()
     best_month  = r.max()
     worst_month = r.min()
 
     metrics = {
-        "Ann. Return (%)"   : round(ann_return * 100, 2),
+        "Ann. Return (%)"    : round(ann_return * 100, 2),
         "Ann. Volatility (%)": round(ann_vol * 100, 2),
-        "Sharpe Ratio"      : round(sharpe, 3),
-        "Max Drawdown (%)"  : round(max_dd * 100, 2),
-        "Win Rate (%)"      : round(win_rate * 100, 2),
-        "Best Month (%)"    : round(best_month * 100, 2),
-        "Worst Month (%)"   : round(worst_month * 100, 2),
-        "N Months"          : len(r),
+        "Sharpe Ratio"       : round(sharpe, 3),
+        "Max Drawdown (%)"   : round(max_dd * 100, 2),
+        "Win Rate (%)"       : round(win_rate * 100, 2),
+        "Best Month (%)"     : round(best_month * 100, 2),
+        "Worst Month (%)"    : round(worst_month * 100, 2),
+        "N Months"           : len(r),
     }
-
-    print(f"\n{'='*40}")
-    print(f"  {name}")
-    print(f"{'='*40}")
-    for k, v in metrics.items():
-        print(f"  {k:<22}: {v}")
 
     return metrics, cum, drawdown
 
-def plot_results(portfolios, benchmark):
+def print_summary_table(strategies):
     """
-    Plot cumulative returns and drawdowns for all strategies.
+    Print comparison table for multiple strategies.
+
+    Parameters
+    ----------
+    strategies : dict of {name: metrics_dict}
     """
-    ls  = portfolios["long_short_return"].dropna()
-    lo  = portfolios["long_only_return"].dropna()
-    bm  = benchmark.dropna()
+    names   = list(strategies.keys())
+    metrics = list(strategies.values())
+    keys    = list(metrics[0].keys())
 
-    # Align all series
-    common = ls.index.intersection(lo.index).intersection(bm.index)
-    ls  = ls.loc[common]
-    lo  = lo.loc[common]
-    bm  = bm.loc[common]
+    # Header
+    print(f"\n{'='*80}")
+    header = f"{'Metric':<25}"
+    for name in names:
+        header += f"{name:>17}"
+    print(header)
+    print(f"{'='*80}")
 
-    ls_cum = (1 + ls).cumprod()
-    lo_cum = (1 + lo).cumprod()
-    bm_cum = (1 + bm).cumprod()
+    # Rows
+    for key in keys:
+        row = f"{key:<25}"
+        for m in metrics:
+            row += f"{str(m[key]):>17}"
+        print(row)
+    print(f"{'='*80}")
 
-    ls_dd  = (ls_cum - ls_cum.cummax()) / ls_cum.cummax()
-    lo_dd  = (lo_cum - lo_cum.cummax()) / lo_cum.cummax()
-    bm_dd  = (bm_cum - bm_cum.cummax()) / bm_cum.cummax()
+def plot_comparison(strategies_cum, strategies_dd, title="VN30 Momentum Strategy"):
+    """
+    Plot cumulative returns and drawdowns for multiple strategies.
 
-    fig, axes = plt.subplots(2, 1, figsize=(12, 8))
-    fig.suptitle("VN30 Momentum Strategy — Performance (2018–2024)",
+    Parameters
+    ----------
+    strategies_cum : dict of {name: cumulative return Series}
+    strategies_dd  : dict of {name: drawdown Series}
+    """
+    colors = {
+        "LS Monthly"   : "steelblue",
+        "LO Monthly"   : "darkorange",
+        "LS JT (12-1-6)": "green",
+        "LO JT (12-1-6)": "red",
+        "Benchmark"    : "grey",
+    }
+    linestyles = {
+        "LS Monthly"   : "-",
+        "LO Monthly"   : "-",
+        "LS JT (12-1-6)": "--",
+        "LO JT (12-1-6)": "--",
+        "Benchmark"    : ":",
+    }
+
+    fig, axes = plt.subplots(2, 1, figsize=(13, 9))
+    fig.suptitle(f"{title} — Performance (2018–2024)",
                  fontsize=13, fontweight="bold")
 
-    # Cumulative returns
-    axes[0].plot(ls_cum.index, ls_cum.values,
-                 label="Long-Short", color="steelblue", linewidth=1.8)
-    axes[0].plot(lo_cum.index, lo_cum.values,
-                 label="Long-Only", color="darkorange", linewidth=1.8)
-    axes[0].plot(bm_cum.index, bm_cum.values,
-                 label="VN30 Benchmark", color="grey",
-                 linewidth=1.2, linestyle="--")
+    for name, cum in strategies_cum.items():
+        axes[0].plot(
+            cum.index, cum.values,
+            label=name,
+            color=colors.get(name, "black"),
+            linestyle=linestyles.get(name, "-"),
+            linewidth=1.8
+        )
+
     axes[0].axhline(y=1, color="black", linestyle=":", linewidth=0.8)
     axes[0].set_ylabel("Cumulative Return (VND 1 invested)")
-    axes[0].legend(loc="upper left")
+    axes[0].legend(loc="upper left", fontsize=9)
     axes[0].grid(alpha=0.3)
     axes[0].xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
-    # Drawdowns
-    axes[1].fill_between(ls_dd.index, ls_dd.values * 100, 0,
-                          label="Long-Short", color="steelblue", alpha=0.4)
-    axes[1].fill_between(lo_dd.index, lo_dd.values * 100, 0,
-                          label="Long-Only", color="darkorange", alpha=0.4)
-    axes[1].fill_between(bm_dd.index, bm_dd.values * 100, 0,
-                          label="VN30 Benchmark", color="grey", alpha=0.25)
+    for name, dd in strategies_dd.items():
+        axes[1].fill_between(
+            dd.index, dd.values * 100, 0,
+            label=name,
+            color=colors.get(name, "black"),
+            alpha=0.25
+        )
+
     axes[1].set_ylabel("Drawdown (%)")
-    axes[1].legend(loc="lower left")
+    axes[1].legend(loc="lower left", fontsize=9)
     axes[1].grid(alpha=0.3)
     axes[1].xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
     plt.tight_layout()
     os.makedirs("output", exist_ok=True)
-    plt.savefig("output/performance.png", dpi=150, bbox_inches="tight")
+    plt.savefig("output/performance_comparison.png", dpi=150,
+                bbox_inches="tight")
     plt.show()
-    print("\nChart saved to output/performance.png")
-
-def print_summary_table(ls_metrics, lo_metrics, bm_metrics):
-    """Print a clean comparison table."""
-    print(f"\n{'='*60}")
-    print(f"{'Metric':<25} {'Long-Short':>12} {'Long-Only':>12} {'Benchmark':>12}")
-    print(f"{'='*60}")
-    for key in ls_metrics:
-        print(f"{key:<25} {str(ls_metrics[key]):>12} "
-              f"{str(lo_metrics[key]):>12} {str(bm_metrics[key]):>12}")
-    print(f"{'='*60}")
+    print("\nChart saved to output/performance_comparison.png")
 
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, ".")
 
-    # Load data
-    portfolios = pd.read_csv(
+    # ── Load all portfolio data ─────────────────────────────────────────────────
+
+    # Monthly rebalancing
+    port_monthly = pd.read_csv(
         "data/processed/portfolios.csv",
         index_col=0, parse_dates=True
     )
+
+    # JT overlapping
+    port_jt = pd.read_csv(
+        "data/processed/portfolios_jt.csv",
+        index_col=0, parse_dates=True
+    )
+
+    # Benchmark
     benchmark = pd.read_csv(
         "data/processed/benchmark.csv",
         index_col=0, parse_dates=True
     ).squeeze()
 
-    print(f"Portfolio period: {portfolios.index[0].date()} "
-          f"to {portfolios.index[-1].date()}")
-    print(f"Months: {len(portfolios)}")
-
-    # Compute metrics
-    ls_metrics, ls_cum, ls_dd = compute_metrics(
-        portfolios["long_short_return"], "Long-Short Momentum"
-    )
-    lo_metrics, lo_cum, lo_dd = compute_metrics(
-        portfolios["long_only_return"], "Long-Only Momentum"
-    )
-    bm_metrics, bm_cum, bm_dd = compute_metrics(
-        benchmark, "VN30 Equal-Weight Benchmark"
+    # ── Align all to common date range ─────────────────────────────────────────
+    common = (
+        port_monthly.index
+        .intersection(port_jt.index)
+        .intersection(benchmark.index)
     )
 
-    # Summary table
-    print_summary_table(ls_metrics, lo_metrics, bm_metrics)
+    ls_monthly = port_monthly.loc[common, "long_short_return"]
+    lo_monthly = port_monthly.loc[common, "long_only_return"]
+    ls_jt      = port_jt.loc[common, "long_short_return"]
+    lo_jt      = port_jt.loc[common, "long_only_return"]
+    bm         = benchmark.loc[common]
 
-    # Plot
-    plot_results(portfolios, benchmark)
+    print(f"Common period: {common[0].date()} to {common[-1].date()}")
+    print(f"Months       : {len(common)}")
 
-    # Save metrics
-    summary = pd.DataFrame({
-        "Long-Short" : ls_metrics,
-        "Long-Only"  : lo_metrics,
-        "Benchmark"  : bm_metrics,
-    })
-    summary.to_csv("output/metrics.csv")
-    print("Metrics saved to output/metrics.csv")
+    # ── Compute metrics ─────────────────────────────────────────────────────────
+    strategies = {}
+    cums       = {}
+    dds        = {}
+
+    for name, series in [
+        ("LS Monthly",    ls_monthly),
+        ("LO Monthly",    lo_monthly),
+        ("LS JT (12-1-6)", ls_jt),
+        ("LO JT (12-1-6)", lo_jt),
+        ("Benchmark",     bm),
+    ]:
+        m, cum, dd        = compute_metrics(series, name)
+        strategies[name]  = m
+        cums[name]        = cum
+        dds[name]         = dd
+
+    # ── Print comparison table ───────────────────────────────────────────────────
+    print_summary_table(strategies)
+
+    # ── Plot ─────────────────────────────────────────────────────────────────────
+    plot_comparison(cums, dds)
+
+    # ── Save metrics ─────────────────────────────────────────────────────────────
+    summary = pd.DataFrame(strategies)
+    summary.to_csv("output/metrics_comparison.csv")
+    print("Metrics saved to output/metrics_comparison.csv")
