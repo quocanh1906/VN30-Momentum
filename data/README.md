@@ -40,3 +40,10 @@ month to approximate month-end values. This introduces a minor timing
 mismatch for one stock across 2018-2020.
 
 ## File Structure
+
+## Disclaimer
+
+Price data is sourced from vnstock which pulls from Vietnamese broker 
+APIs (KBS). Data quality has been verified for the VN30 constituent 
+periods but may contain gaps or errors for non-constituent periods. 
+Users should independently verify data before use in live trading.

@@ -9,107 +9,37 @@ import glob
 # Rebalanced every January and July (effective 4th Monday)
 
 VN30_CONSTITUENTS = {
-    "2018-01": [
-        "ACB","BID","BVH","CTG","FLC","FPT","GAS","HDB","HPG",
-        "MBB","MSN","MWG","ROS","SAB","STB","TCB","VCB","VHM",
-        "VIC","VJC","VNM","VPB","VRE","GVR","DPM","GMD","EIB",
-        "PNJ","REE","KDH"
-    ],
-    "2018-07": [
-        "ACB","BID","BVH","CTG","FLC","FPT","GAS","HDB","HPG",
-        "MBB","MSN","MWG","ROS","SAB","STB","TCB","VCB","VHM",
-        "VIC","VJC","VNM","VPB","VRE","GVR","DPM","GMD","EIB",
-        "PNJ","REE","KDH"
-    ],
-    "2019-01": [
-        "ACB","BID","BVH","CTG","FLC","FPT","GAS","HDB","HPG",
-        "MBB","MSN","MWG","ROS","SAB","STB","TCB","VCB","VHM",
-        "VIC","VJC","VNM","VPB","VRE","GVR","DPM","GMD","EIB",
-        "PNJ","REE","KDH"
-    ],
-    "2019-07": [
-        "ACB","BID","BVH","CTG","FLC","FPT","GAS","HDB","HPG",
-        "MBB","MSN","MWG","ROS","SAB","STB","TCB","VCB","VHM",
-        "VIC","VJC","VNM","VPB","VRE","GVR","DPM","GMD","EIB",
-        "PNJ","REE","KDH"
-    ],
-    "2020-01": [
-        "ACB","BID","BVH","CTG","FLC","FPT","GAS","HDB","HPG",
-        "MBB","MSN","MWG","ROS","SAB","STB","TCB","VCB","VHM",
-        "VIC","VJC","VNM","VPB","VRE","GVR","PLX","POW","TPB",
-        "PNJ","REE","KDH"
-    ],
-    "2020-07": [
-        "ACB","BID","BVH","CTG","FLC","FPT","GAS","HDB","HPG",
-        "MBB","MSN","MWG","ROS","SAB","STB","TCB","VCB","VHM",
-        "VIC","VJC","VNM","VPB","VRE","GVR","PLX","POW","TPB",
-        "PNJ","REE","KDH"
-    ],
-    "2021-01": [
-        "ACB","BID","BVH","CTG","FLC","FPT","GAS","HDB","HPG",
-        "MBB","MSN","MWG","SAB","STB","TCB","VCB","VHM","VIC",
-        "VJC","VNM","VPB","VRE","GVR","PLX","POW","TPB","PNJ",
-        "REE","KDH","NVL"
-    ],
-    "2021-07": [
-        "ACB","BID","BVH","CTG","FLC","FPT","GAS","HDB","HPG",
-        "MBB","MSN","MWG","SAB","STB","TCB","VCB","VHM","VIC",
-        "VJC","VNM","VPB","VRE","GVR","PLX","POW","TPB","PDR",
-        "REE","KDH","NVL"
-    ],
-    "2022-01": [
-        "ACB","BID","BVH","CTG","FPT","GAS","HDB","HPG","MBB",
-        "MSN","MWG","SAB","STB","TCB","VCB","VHM","VIC","VJC",
-        "VNM","VPB","VRE","GVR","PLX","POW","TPB","PDR","REE",
-        "KDH","NVL","SSI"
-    ],
-    "2022-07": [
-        "ACB","BID","BVH","CTG","FPT","GAS","HDB","HPG","MBB",
-        "MSN","MWG","SAB","STB","TCB","VCB","VHM","VIC","VJC",
-        "VNM","VPB","VRE","GVR","PLX","POW","TPB","PDR","VIB",
-        "KDH","NVL","SSI"
-    ],
-    "2023-01": [
-        "ACB","BID","BVH","CTG","FPT","GAS","HDB","HPG","MBB",
-        "MSN","MWG","SAB","STB","TCB","VCB","VHM","VIC","VJC",
-        "VNM","VPB","VRE","GVR","PLX","POW","TPB","PDR","VIB",
-        "BCM","NVL","SSI"
-    ],
-    "2023-07": [
-        "ACB","BID","BVH","CTG","FPT","GAS","HDB","HPG","MBB",
-        "MSN","MWG","SAB","STB","TCB","VCB","VHM","VIC","VJC",
-        "VNM","VPB","VRE","GVR","PLX","POW","TPB","SHB","VIB",
-        "BCM","SSB","SSI"
-    ],
-    "2024-01": [
-        "ACB","BID","BVH","CTG","FPT","GAS","HDB","HPG","MBB",
-        "MSN","MWG","SAB","STB","TCB","VCB","VHM","VIC","VJC",
-        "VNM","VPB","VRE","GVR","PLX","POW","TPB","SHB","VIB",
-        "BCM","SSB","SSI"
-    ],
-    "2024-07": [
-        "ACB","BID","BVH","CTG","FPT","GAS","HDB","HPG","MBB",
-        "MSN","MWG","SAB","STB","TCB","VCB","VHM","VIC","VJC",
-        "VNM","VPB","VRE","GVR","PLX","POW","TPB","SHB","VIB",
-        "BCM","SSB","SSI"
-    ],
+    "2018-01": ["BID","BMP","BVH","CII","CTD","CTG","DHG","DPM","FPT","GAS","GMD","HPG","HSG","KDC","MBB","MSN","MWG","NT2","NVL","PLX","REE","ROS","SAB","SBT","SSI","STB","VCB","VIC","VJC","VNM"],
+    "2018-07": ["BMP","CII","CTD","CTG","DHG","DPM","FPT","GAS","GMD","HPG","HSG","KDC","MBB","MSN","MWG","NVL","PLX","PNJ","REE","ROS","SAB","SBT","SSI","STB","VCB","VIC","VJC","VNM","VPB","VRE"],
+    "2019-01": ["CII","CTD","CTG","DHG","DPM","EIB","FPT","GAS","GMD","HDB","HPG","MBB","MSN","MWG","NVL","PNJ","REE","ROS","SAB","SBT","SSI","STB","TCB","VCB","VHM","VIC","VJC","VNM","VPB","VRE"],
+    "2019-07": ["BID","BVH","CTD","CTG","DPM","EIB","FPT","GAS","GMD","HDB","HPG","MBB","MSN","MWG","NVL","PNJ","REE","ROS","SAB","SBT","SSI","STB","TCB","VCB","VHM","VIC","VJC","VNM","VPB","VRE"],
+    "2020-01": ["BID","BVH","CTD","CTG","EIB","FPT","GAS","HDB","HPG","MBB","MSN","MWG","NVL","PLX","PNJ","POW","REE","ROS","SAB","SBT","SSI","STB","TCB","VCB","VHM","VIC","VJC","VNM","VPB","VRE"],
+    "2020-07": ["BID","CTG","EIB","FPT","GAS","HDB","HPG","KDH","MBB","MSN","MWG","NVL","PLX","PNJ","POW","REE","ROS","SAB","SBT","SSI","STB","TCB","TCH","VCB","VHM","VIC","VJC","VNM","VPB","VRE"],
+    "2021-01": ["BID","BVH","CTG","FPT","GAS","HDB","HPG","KDH","MBB","MSN","MWG","NVL","PDR","PLX","PNJ","POW","REE","SBT","SSI","STB","TCB","TCH","TPB","VCB","VHM","VIC","VJC","VNM","VPB","VRE"],
+    "2021-07": ["ACB","BID","BVH","CTG","FPT","GAS","GVR","HDB","HPG","KDH","MBB","MSN","MWG","NVL","PDR","PLX","PNJ","POW","SAB","SSI","STB","TCB","TPB","VCB","VHM","VIC","VJC","VNM","VPB","VRE"],
+    "2022-01": ["ACB","BID","BVH","CTG","FPT","GAS","GVR","HDB","HPG","KDH","MBB","MSN","MWG","NVL","PDR","PLX","PNJ","POW","SAB","SSI","STB","TCB","TPB","VCB","VHM","VIC","VJC","VNM","VPB","VRE"],
+    "2022-07": ["ACB","BID","BVH","CTG","FPT","GAS","GVR","HDB","HPG","KDH","MBB","MSN","MWG","NVL","PDR","PLX","POW","SAB","SSI","STB","TCB","TPB","VCB","VHM","VIB","VIC","VJC","VNM","VPB","VRE"],
+    "2023-01": ["ACB","BCM","BID","BVH","CTG","FPT","GAS","GVR","HDB","HPG","MBB","MSN","MWG","NVL","PDR","PLX","POW","SAB","SSI","STB","TCB","TPB","VCB","VHM","VIB","VIC","VJC","VNM","VPB","VRE"],
+    "2023-07": ["ACB","BCM","BID","BVH","CTG","FPT","GAS","GVR","HDB","HPG","MBB","MSN","MWG","PLX","POW","SAB","SHB","SSB","SSI","STB","TCB","TPB","VCB","VHM","VIB","VIC","VJC","VNM","VPB","VRE"],
+    "2024-01": ["ACB","BCM","BID","BVH","CTG","FPT","GAS","GVR","HDB","HPG","MBB","MSN","MWG","PLX","POW","SAB","SHB","SSB","SSI","STB","TCB","TPB","VCB","VHM","VIB","VIC","VJC","VNM","VPB","VRE"],
+    "2024-07": ["ACB","BCM","BID","BVH","CTG","FPT","GAS","GVR","HDB","HPG","MBB","MSN","MWG","PLX","POW","SAB","SHB","SSB","SSI","STB","TCB","TPB","VCB","VHM","VIB","VIC","VJC","VNM","VPB","VRE"],
 }
 
 VN30_RESERVES = {
-    "2018-01": ["EIB","GMD","DPM","REE","PNJ"],
-    "2018-07": ["EIB","GMD","DPM","REE","PNJ"],
-    "2019-01": ["EIB","GMD","DPM","REE","PNJ"],
-    "2019-07": ["EIB","GMD","DPM","REE","PNJ"],
-    "2020-01": ["TPB","VGC","KDH","EIB","REE"],
-    "2020-07": ["EIB","REE","KDH","VGC","PNJ"],
-    "2021-01": ["EIB","REE","PDR","SSI","VGC"],
-    "2021-07": ["EIB","SSI","REE","VGC","KDH"],
+    "2018-01": ["PNJ","HNG","HT1","HAG","KBC"],
+    "2018-07": ["VCI","DXG","PDR","HCM","TCH"],
+    "2019-01": ["VCI","DXG","PDR","HCM","TCH"],
+    "2019-07": ["TPB","GEX","DXG","VHC","TCH"],
+    "2020-01": ["TPB","GEX","PDR","KBC","DXG"],
+    "2020-07": ["GEX","PDR","PHR","KBC","DXG"],
+    "2021-01": ["GEX","PHR","KBC","VHC","VPI"],
+    "2021-07": ["VIB","MSB","OCB","EIB","DGC"],
     "2022-01": ["VIB","SSB","OCB","MSB","EIB"],
-    "2022-07": ["SSB","OCB","MSB","EIB","PNJ"],
-    "2023-01": ["EIB","PNJ","REE","DGC","MSB"],
+    "2022-07": ["SSB","SHB","EIB","MSB","OCB"],
+    "2023-01": ["SSB","SHB","EIB","DGC","MSB"],
     "2023-07": ["EIB","PNJ","REE","DGC","MSB"],
     "2024-01": ["EIB","PNJ","REE","DGC","MSB"],
-    "2024-07": ["EIB","PNJ","REE","DGC","MSB"],
+    "2024-07": ["LPB","DGC","EIB","NVL","PNJ"],
 }
 
 # All unique tickers ever in VN30 or reserve list
