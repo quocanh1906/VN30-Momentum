@@ -1,13 +1,9 @@
 import pandas as pd
 import numpy as np
-import yfinance as yf
 import os
-import glob
+import time
 
 # ── Point-in-time VN30 constituents ────────────────────────────────────────────
-# Source: HOSE official announcements
-# Rebalanced every January and July (effective 4th Monday)
-
 VN30_CONSTITUENTS = {
     "2018-01": ["BID","BMP","BVH","CII","CTD","CTG","DHG","DPM","FPT","GAS","GMD","HPG","HSG","KDC","MBB","MSN","MWG","NT2","NVL","PLX","REE","ROS","SAB","SBT","SSI","STB","VCB","VIC","VJC","VNM"],
     "2018-07": ["BMP","CII","CTD","CTG","DHG","DPM","FPT","GAS","GMD","HPG","HSG","KDC","MBB","MSN","MWG","NVL","PLX","PNJ","REE","ROS","SAB","SBT","SSI","STB","VCB","VIC","VJC","VNM","VPB","VRE"],
@@ -42,7 +38,6 @@ VN30_RESERVES = {
     "2024-07": ["LPB","DGC","EIB","NVL","PNJ"],
 }
 
-# All unique tickers ever in VN30 or reserve list
 VN30_MASTER = sorted(set(
     ticker
     for tickers in list(VN30_CONSTITUENTS.values()) +
@@ -50,139 +45,177 @@ VN30_MASTER = sorted(set(
     for ticker in tickers
 ))
 
-def get_active_constituents(date):
-    """
-    Return the VN30 constituent list active on a given date.
-    VN30 is rebalanced in January and July each year.
-    """
-    date   = pd.Timestamp(date)
-    year   = date.year
-    month  = date.month
-    key    = f"{year}-01" if month < 7 else f"{year}-07"
+# ── ROS manual data ─────────────────────────────────────────────────────────────
+# Source: cafef.vn — first day of month prices, shifted to previous month-end
+# ROS (FLC Faros) — data unavailable from vnstock due to FLC fraud scandal
+# Manually sourced and shifted by one month to approximate month-end prices
 
-    # Fall back to most recent available period if key not found
-    periods = sorted(VN30_CONSTITUENTS.keys())
-    while key not in VN30_CONSTITUENTS:
-        idx = periods.index(key) - 1 if key in periods else -1
-        key = periods[max(idx, 0)]
+ROS_PRICES = {
+    "2016-12-31": 98106.0,
+    "2017-01-31": 112803.0,
+    "2017-02-28": 124318.1,
+    "2017-03-31": 122727.2,
+    "2017-04-30": 100000.0,
+    "2017-05-31": 67045.4,
+    "2017-06-30": 76250.0,
+    "2017-07-31": 92500.0,
+    "2017-08-31": 89250.0,
+    "2017-09-30": 166666.6,
+    "2017-10-31": 148083.3,
+    "2017-11-30": 151416.6,
+    "2017-12-31": 145333.3,
+    "2018-01-31": 114333.3,
+    "2018-02-28": 112500.0,
+    "2018-03-31": 71666.6,
+    "2018-04-30": 60700.0,
+    "2018-05-31": 43000.0,
+    "2018-06-30": 42600.0,
+    "2018-07-31": 41200.0,
+    "2018-08-31": 40300.0,
+    "2018-09-30": 38150.0,
+    "2018-10-31": 36000.0,
+    "2018-11-30": 38700.0,
+    "2018-12-31": 31450.0,
+    "2019-01-31": 34650.0,
+    "2019-02-28": 32000.0,
+    "2019-03-31": 30850.0,
+    "2019-04-30": 29950.0,
+    "2019-05-31": 29800.0,
+    "2019-06-30": 27150.0,
+    "2019-07-31": 28000.0,
+    "2019-08-31": 26400.0,
+    "2019-09-30": 25100.0,
+    "2019-10-31": 24300.0,
+    "2019-11-30": 17300.0,
+    "2019-12-31": 9330.0,
+    "2020-01-31": 7260.0,
+    "2020-02-29": 3260.0,
+    "2020-03-31": 3760.0,
+    "2020-04-30": 3500.0,
+    "2020-05-31": 2970.0,
+    "2020-06-30": 2090.0,
+    "2020-07-31": 2220.0,
+    "2020-08-31": 2170.0,
+    "2020-09-30": 2200.0,
+    "2020-10-31": 2180.0,
+    "2020-11-30": 2530.0,
+    "2020-12-31": 4480.0,
+    "2021-01-31": 3400.0,
+    "2021-02-28": 4820.0,
+    "2021-03-31": 6440.0,
+    "2021-04-30": 6530.0,
+    "2021-05-31": 6550.0,
+    "2021-06-30": 4970.0,
+    "2021-07-31": 4970.0,
+    "2021-08-31": 5250.0,
+    "2021-09-30": 5600.0,
+    "2021-10-31": 6930.0,
+    "2021-11-30": 13600.0,
+    "2021-12-31": 7090.0,
+    "2022-01-31": 8200.0,
+    "2022-02-28": 7060.0,
+    "2022-03-31": 5310.0,
+    "2022-04-30": 4110.0,
+    "2022-05-31": 2880.0,
+    "2022-06-30": 2890.0,
+    "2022-07-31": 2510.0,
+}
 
-    return VN30_CONSTITUENTS[key], VN30_RESERVES.get(key, [])
 
-def download_prices(symbols, start="2015-01-01", end="2024-12-31"):
+def get_ros_series():
+    """Return ROS as a monthly price Series."""
+    ros = pd.Series(ROS_PRICES)
+    ros.index = pd.to_datetime(ros.index)
+    ros.name = "ROS"
+    return ros
+
+
+def download_single_vnstock(symbol, start="2015-01-01", end="2024-12-31",
+                             retries=3, delay=5):
     """
-    Download monthly adjusted close prices from Yahoo Finance.
-    Downloads in batches of 15 to avoid rate limiting.
-    Returns DataFrame: dates as index, tickers as columns.
+    Download single stock monthly prices from vnstock with retry.
+    Rate limit: 3 seconds between requests.
     """
-    yf_symbols = [s + ".VN" for s in symbols]
-    all_prices  = []
-    batch_size  = 15
-    batches     = [
-        yf_symbols[i:i + batch_size]
-        for i in range(0, len(yf_symbols), batch_size)
-    ]
+    from vnstock import Quote
 
-    for i, batch in enumerate(batches):
-        tickers_clean = [s.replace(".VN", "") for s in batch]
-        print(f"Batch {i+1}/{len(batches)}: {tickers_clean}")
+    for attempt in range(retries):
         try:
-            raw = yf.download(
-                tickers     = batch,
-                start       = start,
-                end         = end,
-                interval    = "1mo",
-                auto_adjust = True,
-                progress    = False
-            )
-            if raw.empty:
-                print(f"  No data returned")
-                continue
+            quote = Quote(symbol=symbol, source='KBS')
+            df    = quote.history(start=start, end=end, interval='1D')
 
-            # Handle single vs multi ticker response
-            if isinstance(raw.columns, pd.MultiIndex):
-                prices = raw["Close"].copy()
+            if df is None or df.empty:
+                return None
+
+            df['time'] = pd.to_datetime(df['time'])
+            df = df.set_index('time')['close'].sort_index()
+
+            # Resample daily to monthly end-of-month
+            df = df.resample('ME').last().dropna()
+
+            # Deduplicate just in case
+            df = df[~df.index.duplicated(keep='last')]
+            df.name = symbol
+            return df
+
+        except Exception as e:
+            if attempt < retries - 1:
+                print(f"  ↻ {symbol} attempt {attempt+1} failed: {e} — retrying in {delay}s")
+                time.sleep(delay)
             else:
-                prices = raw[["Close"]].copy()
-                prices.columns = [batch[0].replace(".VN", "")]
+                print(f"  ✗ {symbol}: {e}")
+                return None
 
-            prices.columns = [c.replace(".VN", "") for c in prices.columns]
-            all_prices.append(prices)
 
-        except Exception as e:
-            print(f"  Batch failed: {e}")
-
-    if not all_prices:
-        raise ValueError("No data downloaded from Yahoo Finance.")
-
-    combined = pd.concat(all_prices, axis=1)
-    combined = combined.loc[:, ~combined.columns.duplicated()]
-    combined.index = pd.to_datetime(combined.index)
-    return combined.sort_index()
-
-def load_manual_prices(raw_dir="data/raw"):
+def download_all_vnstock(symbols, start="2015-01-01", end="2024-12-31",
+                          delay=3, batch_pause=60, batch_size=15):
     """
-    Load manually downloaded Excel files from cafef.vn.
-    Each file must be named TICKER.xlsx and contain:
-      - 'Ngay' or 'Ngày' column for dates
-      - 'Gia dieu chinh' or 'Giá điều chỉnh' for adjusted prices
-    Returns DataFrame of monthly prices.
+    Download all symbols with rate limiting.
+    Rate limit: 3s between requests, 60s pause every 15 requests.
     """
-    files  = glob.glob(os.path.join(raw_dir, "*.xlsx"))
-    prices = {}
+    results = {}
+    failed  = []
+    total   = len(symbols)
 
-    if not files:
-        print("  No manual files found in data/raw/")
-        return pd.DataFrame()
+    # Skip ROS — handled separately from hardcoded data
+    symbols = [s for s in symbols if s != "ROS"]
 
-    for f in files:
-        ticker = os.path.basename(f).replace(".xlsx", "").upper()
-        try:
-            df = pd.read_excel(f)
+    print(f"\nDownloading {len(symbols)} tickers from vnstock...")
+    print(f"Estimated time: ~{(len(symbols)*delay + (len(symbols)//batch_size)*batch_pause)//60+1} mins\n")
 
-            # Find date column
-            date_col = next(
-                (c for c in df.columns if "ng" in c.lower()), None
-            )
-            # Find adjusted price column
-            price_col = next(
-                (c for c in df.columns if "u ch" in c.lower()), None
-            )
+    for i, symbol in enumerate(symbols):
+        print(f"[{i+1}/{len(symbols)}] {symbol}...", end=" ", flush=True)
+        series = download_single_vnstock(symbol, start, end)
 
-            if date_col is None or price_col is None:
-                print(f"  ✗ {ticker}: cannot find date/price columns "
-                      f"— columns are: {df.columns.tolist()}")
-                continue
+        if series is not None and not series.empty:
+            results[symbol] = series
+            print(f"✓ {len(series)} months")
+        else:
+            failed.append(symbol)
+            print("✗ no data")
 
-            df[date_col]  = pd.to_datetime(df[date_col], dayfirst=True)
-            series        = df.set_index(date_col)[price_col].sort_index()
-            series        = series.resample("ME").last()
-            prices[ticker] = series
-            print(f"  ✓ {ticker}: {len(series)} months from cafef")
+        if (i + 1) % batch_size == 0 and i + 1 < len(symbols):
+            print(f"\n  --- Pausing {batch_pause}s to reset rate limit ---\n")
+            time.sleep(batch_pause)
+        else:
+            time.sleep(delay)
 
-        except Exception as e:
-            print(f"  ✗ {ticker}: {e}")
+    if failed:
+        print(f"\nFailed ({len(failed)}): {failed}")
 
-    return pd.DataFrame(prices) if prices else pd.DataFrame()
+    return pd.DataFrame(results), failed
+
 
 def check_vn30_coverage(prices):
-    """
-    Check data coverage per VN30 rebalancing period.
-    Only checks stocks during the periods they were actually in VN30.
-    This is the correct survivorship-bias-free coverage check.
-    """
+    """Check data coverage per VN30 rebalancing period."""
     periods = sorted(VN30_CONSTITUENTS.keys())
-
     print(f"\n{'='*60}")
     print("VN30 Point-in-Time Coverage Check")
     print(f"{'='*60}")
-
     missing_by_period = {}
 
     for i, period in enumerate(periods):
         constituents = VN30_CONSTITUENTS[period]
-
-        # Active window for this period
-        year, month = period.split("-")
+        year, month  = period.split("-")
         start = pd.Timestamp(f"{year}-{month}-01")
         end   = (
             pd.Timestamp(f"{periods[i+1].split('-')[0]}-"
@@ -190,11 +223,9 @@ def check_vn30_coverage(prices):
             if i + 1 < len(periods)
             else pd.Timestamp("2024-12-31")
         )
-
-        window          = prices.loc[(prices.index >= start) &
-                                     (prices.index <  end)]
-        missing         = []
-        sparse          = []
+        window  = prices.loc[(prices.index >= start) & (prices.index < end)]
+        missing = []
+        sparse  = []
 
         for ticker in constituents:
             if ticker not in prices.columns:
@@ -205,81 +236,88 @@ def check_vn30_coverage(prices):
                     sparse.append((ticker, round(cov * 100, 1)))
 
         if missing or sparse:
-            print(f"\n{period}  ({start.date()} → {end.date()}):")
-            if missing:
-                print(f"  ✗ Missing entirely : {missing}")
-            if sparse:
-                print(f"  ⚠ Sparse (<80%)   : {sparse}")
+            print(f"\n❌ {period} ({start.date()} → {end.date()}):")
+            if missing: print(f"   Missing: {missing}")
+            if sparse:  print(f"   Sparse : {sparse}")
             missing_by_period[period] = missing
         else:
-            print(f"✓ {period}: all {len(constituents)} stocks OK")
+            print(f"✓  {period}: all {len(constituents)} stocks OK")
 
     return missing_by_period
+
+
+def download_etf_benchmark(symbol="E1VFVN30", start="2015-01-01",
+                            end="2024-12-31"):
+    """
+    Download monthly E1VFVN30 ETF returns as benchmark.
+    More realistic than equal-weighted constituent returns.
+    """
+    from vnstock import Quote
+
+    print(f"  Downloading {symbol} ETF benchmark...")
+    try:
+        quote = Quote(symbol=symbol, source='KBS')
+        df    = quote.history(start=start, end=end, interval='1D')
+
+        if df is None or df.empty:
+            print(f"  ✗ {symbol}: no data")
+            return None
+
+        df['time'] = pd.to_datetime(df['time'])
+        df = df.set_index('time')['close'].sort_index()
+        df = df.resample('ME').last().dropna()
+
+        returns       = df.pct_change().dropna()
+        returns.index = pd.to_datetime(
+            returns.index.to_period('M').to_timestamp('M')
+        )
+        returns = returns[~returns.index.duplicated()]
+        returns.name = "Benchmark (E1VFVN30)"
+
+        print(f"  ✓ {symbol}: {len(returns)} months "
+              f"({returns.index[0].date()} to {returns.index[-1].date()})")
+        return returns
+
+    except Exception as e:
+        print(f"  ✗ {symbol}: {e}")
+        return None
+
 
 def build_price_matrix(start="2015-01-01", end="2024-12-31"):
     """
     Full data pipeline:
-    1. Download all VN30 master tickers from Yahoo Finance
-    2. Load any manually downloaded cafef files from data/raw/
-    3. Merge — cafef data fills gaps where Yahoo Finance fails
-    4. Run point-in-time coverage check
-    5. Save to data/processed/prices.csv
+    1. Download all VN30 tickers from vnstock
+    2. Inject hardcoded ROS data
+    3. Coverage check
+    4. Save to data/processed/prices.csv
     """
     print("=" * 60)
     print(f"VN30 Master universe: {len(VN30_MASTER)} tickers")
-    print(f"Tickers: {VN30_MASTER}")
     print("=" * 60)
 
-    # Step 1: Yahoo Finance
-    print("\nStep 1: Downloading from Yahoo Finance...")
-    prices = download_prices(VN30_MASTER, start=start, end=end)
+    prices, failed = download_all_vnstock(VN30_MASTER, start=start, end=end)
 
-    # Step 2: Manual cafef files
-    print("\nStep 2: Loading manual cafef files...")
-    manual = load_manual_prices("data/raw")
+    # Inject ROS from hardcoded manual data
+    print("\nInjecting ROS manual data...")
+    ros = get_ros_series()
+    prices["ROS"] = ros
+    print(f"  ✓ ROS: {ros.notna().sum()} months injected")
 
-    # Step 3: Merge
-    if not manual.empty:
-        print("\nStep 3: Merging Yahoo Finance + cafef...")
-        for ticker in manual.columns:
-            if ticker in prices.columns:
-                # Fill Yahoo gaps with cafef data
-                prices[ticker] = prices[ticker].combine_first(manual[ticker])
-                print(f"  Merged {ticker}: Yahoo + cafef")
-            else:
-                # New ticker only available from cafef
-                prices[ticker] = manual[ticker]
-                print(f"  Added  {ticker}: cafef only")
-    else:
-        print("\nStep 3: No manual files to merge")
+    if prices.empty:
+        raise ValueError("No data downloaded.")
 
-    # Step 4: Coverage check
     missing_by_period = check_vn30_coverage(prices)
 
-    # Step 5: Save
     os.makedirs("data/processed", exist_ok=True)
     prices.to_csv("data/processed/prices.csv")
-    print(f"\nSaved to data/processed/prices.csv")
-    print(f"Shape: {prices.shape}")
+    print(f"\nSaved: {prices.shape}")
     print(f"Period: {prices.index[0].date()} to {prices.index[-1].date()}")
-
-    # Summary
-    all_missing = sorted(set(
-        t for tickers in missing_by_period.values() for t in tickers
-    ))
-    if all_missing:
-        print(f"\n{'='*60}")
-        print(f"Action required — download from cafef.vn:")
-        for t in all_missing:
-            print(f"  → {t}")
-        print(f"{'='*60}")
-    else:
-        print("\nAll VN30 constituents have sufficient data!")
 
     return prices, missing_by_period
 
+
 if __name__ == "__main__":
-    prices, missing_by_period = build_price_matrix(
+    prices, missing = build_price_matrix(
         start="2015-01-01",
         end  ="2024-12-31"
     )

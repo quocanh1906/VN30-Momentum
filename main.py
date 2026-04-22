@@ -4,21 +4,17 @@ import sys
 import os
 sys.path.insert(0, "src")
 
-print("Starting main.py...")  # add this line
-sys.path.insert(0, "src")
-print("Importing modules...")  # add this line
+from data import download_etf_benchmark
+from portfolio import build_portfolios, compute_benchmark
+from performance import (compute_metrics, print_summary_table, plot_comparison,
+                         compute_rolling_sharpe, plot_rolling_sharpe,
+                         print_sharpe_regime_summary)
 
-from data import VN30_CONSTITUENTS, VN30_RESERVES
-from signals import compute_momentum
-from portfolio_jt import build_jt_portfolios
-from portfolio_monthly import build_portfolios, compute_benchmark
-from performance import compute_metrics, print_summary_table, plot_comparison
+print("=" * 60)
+print("VN30 Momentum Strategy — Full Pipeline")
+print("=" * 60)
 
 # ── 1. Load prices ──────────────────────────────────────────────────────────────
-print("="*60)
-print("VN30 Momentum Strategy — Full Pipeline")
-print("="*60)
-
 print("\nStep 1: Loading prices...")
 prices = pd.read_csv(
     "data/processed/prices.csv",
@@ -28,99 +24,141 @@ print(f"  Shape : {prices.shape}")
 print(f"  Period: {prices.index[0].date()} to {prices.index[-1].date()}")
 
 # ── 2. Benchmark ────────────────────────────────────────────────────────────────
-print("\nStep 2: Computing benchmark...")
-benchmark = compute_benchmark(prices)
-print(f"  Benchmark months: {len(benchmark)}")
+print("\nStep 2: Loading ETF benchmark...")
+benchmark = download_etf_benchmark(
+    symbol="E1VFVN30",
+    start ="2015-01-01",
+    end   ="2024-12-31"
+)
+if benchmark is None:
+    print("  ETF download failed — falling back to equal-weighted benchmark")
+    benchmark = compute_benchmark(prices)
 
-# ── 3. Run all strategies ───────────────────────────────────────────────────────
-print("\nStep 3: Running all strategies...")
+# Force month-end alignment
+benchmark.index = pd.to_datetime(benchmark.index) + pd.offsets.MonthEnd(0)
+print(f"  Months : {len(benchmark)}")
+
+# ── 3. Run strategies ───────────────────────────────────────────────────────────
+print("\nStep 3: Running strategies...")
 
 all_metrics = {}
 all_cums    = {}
 all_dds     = {}
+all_returns = {}
+port_cache  = {}
 
-# Cache to avoid recomputing same formation period twice
-portfolio_cache = {}
+def run_strategy(name, formation, skip, holding, col, cost, prices, benchmark):
+    """Build portfolio, align to benchmark, compute metrics."""
+    cache_key = (formation, skip, holding, cost)
+    if cache_key not in port_cache:
+        print(f"  Building {formation}-{skip}-{holding} "
+              f"(cost={cost*100:.3f}%)...")
+        port_cache[cache_key] = build_portfolios(
+            prices, formation=formation, skip=skip,
+            holding=holding, cost_per_trade=cost
+        )
+    port = port_cache[cache_key].copy()
 
-# JT overlapping strategies
-jt_strategies = {
-    "LS 3-1-6"  : (3,  1, 6, "ls"),
-    "LO 3-1-6"  : (3,  1, 6, "lo"),
-    "LS 6-1-6"  : (6,  1, 6, "ls"),
-    "LO 6-1-6"  : (6,  1, 6, "lo"),
-    "LS 12-1-6" : (12, 1, 6, "ls"),
-    "LO 12-1-6" : (12, 1, 6, "lo"),
-}
+    # Align index to month-end
+    port.index = pd.to_datetime(port.index) + pd.offsets.MonthEnd(0)
+    common     = port.index.intersection(benchmark.index)
+    series     = port.loc[common, col]
 
-for name, (f, s, h, side) in jt_strategies.items():
-    cache_key = (f, s, h)
-    if cache_key not in portfolio_cache:
-        print(f"  Building JT portfolio (formation={f})...")
-        port = build_jt_portfolios(prices, formation=f, skip=s, holding=h)
-        portfolio_cache[cache_key] = port
-    else:
-        port = portfolio_cache[cache_key]
+    return series
 
-    common = port.index.intersection(benchmark.index)
-    col    = "long_short_return" if side == "ls" else "long_only_return"
-    series = port.loc[common, col]
+# Formation period comparison — no costs
+formations = [
+    ("LS 3-1-6",  3,  1, 6, "long_short_return", 0.0),
+    ("LO 3-1-6",  3,  1, 6, "long_only_return",  0.0),
+    ("LS 6-1-6",  6,  1, 6, "long_short_return", 0.0),
+    ("LO 6-1-6",  6,  1, 6, "long_only_return",  0.0),
+    ("LS 12-1-6", 12, 1, 6, "long_short_return", 0.0),
+    ("LO 12-1-6", 12, 1, 6, "long_only_return",  0.0),
+]
 
-    m, cum, dd        = compute_metrics(series, name)
-    all_metrics[name] = m
-    all_cums[name]    = cum
-    all_dds[name]     = dd
+for name, f, s, h, col, cost in formations:
+    series             = run_strategy(name, f, s, h, col, cost, prices, benchmark)
+    m, cum, dd         = compute_metrics(series, name)
+    all_metrics[name]  = m
+    all_cums[name]     = cum
+    all_dds[name]      = dd
+    all_returns[name]  = series
 
-# Monthly rebalancing strategies
-print("  Building monthly rebalancing portfolios...")
-for f in [3, 12]:
-    momentum = compute_momentum(prices, lookback=f, skip=1)
-    port_m   = build_portfolios(prices, momentum)
-    common   = port_m.index.intersection(benchmark.index)
-
-    for side, col, label in [
-        ("ls", "long_short_return", f"LS {f}-1 Monthly"),
-        ("lo", "long_only_return",  f"LO {f}-1 Monthly"),
-    ]:
-        series             = port_m.loc[common, col]
-        m, cum, dd         = compute_metrics(series, label)
-        all_metrics[label] = m
-        all_cums[label]    = cum
-        all_dds[label]     = dd
+# Transaction cost sensitivity — best formation LS 3-1-6
+print("\n  Transaction cost sensitivity (3-1-6 LS)...")
+cost_scenarios = [
+    ("LS (no cost)",     3, 1, 6, "long_short_return", 0.000),
+    ("LS (Realistic)",   3, 1, 6, "long_short_return", 0.00125),
+    ("LS (Conservative)",3, 1, 6, "long_short_return", 0.00175),
+]
+for name, f, s, h, col, cost in cost_scenarios:
+    series             = run_strategy(name, f, s, h, col, cost, prices, benchmark)
+    m, cum, dd         = compute_metrics(series, name)
+    all_metrics[name]  = m
+    all_cums[name]     = cum
+    all_dds[name]      = dd
+    all_returns[name]  = series
 
 # Benchmark
-bm_common                    = benchmark.reindex(common)
-m, cum, dd                   = compute_metrics(bm_common, "Benchmark")
-all_metrics["Benchmark"]     = m
-all_cums["Benchmark"]        = cum
-all_dds["Benchmark"]         = dd
+bm_common                = benchmark.reindex(
+    list(all_returns.values())[0].index
+)
+m, cum, dd               = compute_metrics(bm_common, "Benchmark")
+all_metrics["Benchmark"] = m
+all_cums["Benchmark"]    = cum
+all_dds["Benchmark"]     = dd
+all_returns["Benchmark"] = bm_common
 
 # ── 4. Print results ────────────────────────────────────────────────────────────
 print("\nStep 4: Results")
 
-# JT overlapping strategies
-jt_results = {k: v for k, v in all_metrics.items()
-              if "Monthly" not in k}
-print("\nJT Overlapping Strategies:")
-print_summary_table(jt_results)
+formation_results = {k: v for k, v in all_metrics.items()
+                     if "-1-6" in k or k == "Benchmark"}
+print("\nFormation Period Comparison:")
+print_summary_table(formation_results)
 
-# Monthly rebalancing strategies
-monthly_results = {k: v for k, v in all_metrics.items()
-                   if "Monthly" in k or k == "Benchmark"}
-print("\nMonthly Rebalancing Strategies:")
-print_summary_table(monthly_results)
+cost_results = {k: v for k, v in all_metrics.items()
+                if any(s in k for s in ["no cost", "Realistic", "Conservative"])
+                or k == "Benchmark"}
+print("\nTransaction Cost Sensitivity (3-1-6 LS):")
+print_summary_table(cost_results)
 
-# ── 5. Plot key strategies ──────────────────────────────────────────────────────
-print("\nStep 5: Plotting...")
+# ── 5. Rolling Sharpe ───────────────────────────────────────────────────────────
+print("\nStep 5: Rolling Sharpe analysis...")
+rolling_strategies = {
+    "LS 3-1-6" : all_returns["LS 3-1-6"],
+    "LO 3-1-6" : all_returns["LO 3-1-6"],
+    "LS 12-1-6": all_returns["LS 12-1-6"],
+    "Benchmark" : all_returns["Benchmark"],
+}
+print_sharpe_regime_summary(rolling_strategies, window=12)
+
+# ── 6. Plots ────────────────────────────────────────────────────────────────────
+print("\nStep 6: Plotting...")
+os.makedirs("output", exist_ok=True)
+
+# Plot 1: formation comparison
 key_cum = {k: v for k, v in all_cums.items()
            if k in ["LS 3-1-6", "LO 3-1-6", "LO 12-1-6", "Benchmark"]}
 key_dd  = {k: v for k, v in all_dds.items()
            if k in ["LS 3-1-6", "LO 3-1-6", "LO 12-1-6", "Benchmark"]}
-
 plot_comparison(key_cum, key_dd, title="VN30 Momentum Strategy")
 
-# ── 6. Save ─────────────────────────────────────────────────────────────────────
-print("\nStep 6: Saving results...")
-os.makedirs("output", exist_ok=True)
+# Plot 2: transaction cost impact
+cost_cum = {k: v for k, v in all_cums.items()
+            if any(s in k for s in ["no cost", "Realistic", "Conservative"])
+            or k == "Benchmark"}
+cost_dd  = {k: v for k, v in all_dds.items()
+            if any(s in k for s in ["no cost", "Realistic", "Conservative"])
+            or k == "Benchmark"}
+plot_comparison(cost_cum, cost_dd,
+                title="VN30 Momentum — Transaction Cost Impact")
+
+# Plot 3: rolling Sharpe
+plot_rolling_sharpe(rolling_strategies, window=12)
+
+# ── 7. Save ─────────────────────────────────────────────────────────────────────
+print("\nStep 7: Saving...")
 pd.DataFrame(all_metrics).to_csv("output/all_strategies.csv")
 print("  Saved to output/all_strategies.csv")
 print("\nDone!")
